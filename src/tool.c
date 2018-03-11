@@ -1,5 +1,31 @@
 #include "tool.h"
 
+//[Error] [13:01:22] [tid 6711] [main.c:23 Set_nonblocking()] Set_nonblocking
+void print_log(enum log_level level,const char * func,char * file,int line,char * format,...)
+{
+    va_list ap;
+    va_start(ap,format);
+
+    char msg[1024];
+    vsnprintf(msg,1024,format,ap);
+
+    time_t t = time(0);   
+    size_t timelen = strlen("13:01:22") + 1;
+    char * mode = "Error",* color = RED, //init
+         time[timelen];
+    FILE * stream = stderr;
+    switch(level){
+        case Error : mode = "Error", stream = stderr;color = RED    ;break;
+        case Warn  : mode = "Warn" , stream = stderr; color = YELLOW ;break;
+        case Info: mode = "Info",stream = stderr; color = GREEN  ;break;
+        case Debug : mode = "Debug", stream = stderr;color = BLUE   ;break;
+        case Error_exit : mode = "Error_exit",stream = stderr;color = RED;break;
+    }
+    strftime(time,timelen,"%d:%H:%S",localtime(&t));
+    fprintf(stream,"%s[%s] [%s] [tid %ld] [%s:%d %s()] \033[0m %s\n",
+            color,mode,time,gettid(),file,line,func,msg);
+}
+
 void Add_epoll_fd(int epfd,int fd,__uint32_t events)
 {
     struct epoll_event event = {};
@@ -7,7 +33,7 @@ void Add_epoll_fd(int epfd,int fd,__uint32_t events)
     event.events = events;
 
     if(epoll_ctl(epfd,EPOLL_CTL_ADD,fd,&event) == -1)
-        LOG(Error,"epfd:%d fd:%d %s",epfd,fd,strerror(errno));
+        log_error("epfd:%d fd:%d %s",epfd,fd,strerror(errno));
 }
 
 void Mod_epoll_fd(int epfd,int fd,__uint32_t events)
@@ -17,20 +43,20 @@ void Mod_epoll_fd(int epfd,int fd,__uint32_t events)
     event.events = events;
 
     if(epoll_ctl(epfd,EPOLL_CTL_MOD,fd,&event) == -1)
-        LOG(Error,"epfd:%d fd:%d %s",epfd,fd,strerror(errno));
+        log_error("epfd:%d fd:%d %s",epfd,fd,strerror(errno));
 }
 
 void Del_epoll_fd(int epfd,int fd)
 {
     if(epoll_ctl(epfd,EPOLL_CTL_DEL,fd,NULL) == -1)
-        LOG(Error,"epfd:%d fd:%d %s",epfd,fd,strerror(errno));
+        log_error("epfd:%d fd:%d %s",epfd,fd,strerror(errno));
 }
 
 int Init_epfd(void)
 {
     int epfd = epoll_create1(EPOLL_CLOEXEC);
     if(epfd == -1)
-        LOG(Error,"%s",strerror(errno));
+        log_strerror();
     return epfd;
 }
 
@@ -56,27 +82,7 @@ void print_evmode(int fd,__uint32_t ev)
         offset += snprintf(modes + offset,100,"EPOLLOUT ");
     if(ev & EPOLLWAKEUP)
         offset += snprintf(modes + offset,100,"EPOLLWAKEUP ");
-    LOG(Info,"fd:%d evmode %s",fd,modes);
-}
-
-//[Error] [13:01:22] [tid 6711] [main.c:23 Set_nonblocking()] Set_nonblocking
-void Print_log(enum log_level level,const char * func,char * file,int line,char * msg)
-{
-    time_t t = time(0);   
-    size_t timelen = strlen("13:01:22") + 1;
-    char * mode = "Error",* color = RED, //init
-         time[timelen];
-    FILE * stream = stderr;
-    switch(level){
-        case Error : mode = "Error", stream = stderr;color = RED    ;break;
-        case Warn  : mode = "Warn" , stream = stderr; color = YELLOW ;break;
-        case Info: mode = "Info",stream = stderr; color = GREEN  ;break;
-        case Debug : mode = "Debug", stream = stderr;color = BLUE   ;break;
-        case Error_exit : mode = "Error_exit",stream = stderr;color = RED;break;
-    }
-    strftime(time,timelen,"%d:%H:%S",localtime(&t));
-    fprintf(stream,"%s[%s] [%s] [tid %ld] [%s:%d %s()] \033[0m %s\n",
-            color,mode,time,gettid(),file,line,func,msg);
+    log_info("fd:%d evmode %s",fd,modes);
 }
 
 int Set_nonblocking(int sockfd)
@@ -84,22 +90,22 @@ int Set_nonblocking(int sockfd)
     int flags = fcntl(sockfd,F_GETFL,0);
 
     if(flags == -1)
-        LOG(Error,"fd:%d %s",sockfd,strerror(errno));
+        log_error("fd:%d %s",sockfd,strerror(errno));
     if(fcntl(sockfd,F_SETFL,flags|O_NONBLOCK) == -1)
-        LOG(Error,"fd:%d %s",sockfd,strerror(errno));
+        log_error("fd:%d %s",sockfd,strerror(errno));
     return 0;
 }
 
 void Socketpair(int * socks)
 {
     if(socketpair(AF_UNIX,SOCK_STREAM,0,socks) == -1)
-        LOG(Error,"%s",strerror(errno));
+        log_strerror();
 }
 
 void Close(int fd)
 {
     if(close(fd) < 0)
-        LERROR();
+        log_strerror();
 }
 
 //from csapp.c
@@ -134,9 +140,9 @@ int Open_clientfd(char *hostname, int port)
     
     if ((rc = open_clientfd(hostname, port)) < 0){
         if (rc == -1){
-            LERROR();
+            log_strerror();
         }else{
-            LOG(Error,"Dns error: %s",strerror(errno));
+            log_error("Dns error: %s",strerror(errno));
         }
     }
     return rc;
@@ -167,7 +173,7 @@ int open_listenfd(int port)
         return -1;
     
     /* Make it a listening socket ready to accept connection requests */
-    if (listen(listenfd, LISTENQ) < 0)
+    if (listen(listenfd, listenq) < 0)
         return -1;
     return listenfd;
 }
@@ -178,10 +184,9 @@ int Open_listenfd(int port)
     int rc;
     
     if ((rc = open_listenfd(port)) < 0)
-        LOG(Error_exit,"%s",strerror(errno));
+        log_error_exit("%s",strerror(errno));
     return rc;
 }
-
 static uint16_t hash(char * str,size_t len)
 {
     uint16_t hash = 5381;
@@ -200,79 +205,21 @@ static bool compare(char * a,char * b)
         return false;
 }
 
-static enum method getmethod(int fd)
-{
-    /*http header
-    * GET / HTTP/1.1
-    * Host: www.google.com
-    */
-    //match request methods  OPTIONS,PUT,DELETE,TRACE,GET,POST,HEAD,CONNECT
-    size_t buflen = 7;  //max request method OPTIONS or CONNECT len
-    char buf[buflen];
-    recv(fd,buf,buflen,MSG_PEEK);
-
-    switch(buf[0]){
-    case 'O': //OPTIONS
-        if(compare(buf,"OPTIONS"))
-            return OPTIONS;
-        return UNKNOW;
-    case 'P':
-        switch(buf[1]){
-        case 'P':
-            if(compare(buf,"PUT"))
-                return PUT;
-            return UNKNOW;
-        case 'O':
-            if(compare(buf,"POST"))
-                return POST;
-            return UNKNOW;
-        }
-    case 'D':
-        if(compare(buf,"DELETE"))
-            return DELETE;
-        return UNKNOW;
-    case 'T':
-        if(compare(buf,"TRACE"))
-            return TRACE;
-        return UNKNOW;
-    case 'G':
-        if(compare(buf,"GET"))
-            return GET;
-        return UNKNOW;
-    case 'H':
-        if(compare(buf,"HEAD"))
-            return HEAD;
-        return UNKNOW;
-    case 'C':
-        if(compare(buf,"CONNECT"))
-            return CONNECT;
-        return UNKNOW;
-    default:
-        return UNKNOW;
-    }
-}
-
 bool isHTTP(int fd)
 { 
-    enum method method = getmethod(fd);
-    if((method == UNKNOW) || (method == CONNECT))
+    struct bufer buf;
+    struct header header = view_header(&buf,fd);
+    if(compare(header.method,"CONNECT"))
         return false;
-    else 
+    else
         return true;
 }
-
-
 bool isHTTPS(int fd)
 {
-    enum method method = getmethod(fd);
-    if(method == CONNECT)
+    struct bufer buf;
+    struct header header = view_header(&buf,fd);
+    if(compare(header.method,"CONNECT"))
         return true;
     else
         return false;
-}
-
-void Pipe(int * pipe)
-{
-    if(pipe2(pipe,0) == -1)
-        LERROR();
 }
