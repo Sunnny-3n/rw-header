@@ -88,6 +88,7 @@ bool isHTTP(int fd)
     switch(hash(buf.buf,method_len)){
         case GET:
         case HEAD:
+        case POST:
         case PUT:
         case DELETE:
         case TRACE:
@@ -112,6 +113,7 @@ bool isHTTPS(int fd)
             return true;
         case GET:
         case HEAD:
+        case POST:
         case PUT:
         case DELETE:
         case TRACE:
