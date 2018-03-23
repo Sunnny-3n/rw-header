@@ -1,6 +1,0 @@
-{
-    "cquery.launch.workingDirectory": "/home/archlinux/git/rw-header",
-    "cquery.cacheDirectory": "/tmp/vscode-cquery",
-    "cquery.launch.command": "/usr/bin/cquery",
-    "cquery.codeLens.onLocalVariables": false
-}
