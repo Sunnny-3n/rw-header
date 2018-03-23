@@ -32,5 +32,7 @@ struct header view_header(struct bufer * buf,int fd);
 int readall(struct bufer * buf,int fd);
 int writeto(struct bufer * buf,int fd);
 
+bool isHTTPS(int fd);
+bool isHTTP(int fd);
 
 #endif

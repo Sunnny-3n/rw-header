@@ -85,8 +85,7 @@ void Mod_epoll_fd(int epfd,int fd,__uint32_t events);
 void Close(int fd);
 void print_evmode(int fd,__uint32_t ev);
 int Init_epfd(void);
-bool isHTTPS(int fd);
-bool isHTTP(int fd);
+
 
 void Pipe(int * pipe);
 

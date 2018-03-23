@@ -187,39 +187,3 @@ int Open_listenfd(int port)
         log_error_exit("%s",strerror(errno));
     return rc;
 }
-static uint16_t hash(char * str,size_t len)
-{
-    uint16_t hash = 5381;
-
-    for(int i = 0,c = 33;i <= len;i++)
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-    return hash;
-}
-
-static bool compare(char * a,char * b)
-{
-    size_t len = strlen(b);
-    if(hash(a,len) == hash(b,len))
-        return true;
-    else
-        return false;
-}
-
-bool isHTTP(int fd)
-{ 
-    struct bufer buf;
-    struct header header = view_header(&buf,fd);
-    if(compare(header.method,"CONNECT"))
-        return false;
-    else
-        return true;
-}
-bool isHTTPS(int fd)
-{
-    struct bufer buf;
-    struct header header = view_header(&buf,fd);
-    if(compare(header.method,"CONNECT"))
-        return true;
-    else
-        return false;
-}
