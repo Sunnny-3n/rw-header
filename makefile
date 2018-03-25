@@ -14,7 +14,7 @@ $(PROM): $(OBJ)
 
 .PHONY : clean
 clean:
-	-rm -rf $(OBJ) $(PROM) ./compile_commands.json
+	-rm -rf $(OBJ) $(PROM)
 
 
 .PHONY : analysis
