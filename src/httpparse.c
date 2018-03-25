@@ -1,7 +1,13 @@
 #include "httpparser.h"
 
+static void init_header(struct header * header)
+{
+    header->headers_size = max_headers;
+}
+
 int parse_req(struct bufer buf,struct header * header)
 {
+    init_header(header);
     return phr_parse_request(buf.buf,buf.len,
         (const char **)&(header->method),&(header->method_len),
         (const char **)&(header->path),&(header->path_len),
@@ -9,24 +15,19 @@ int parse_req(struct bufer buf,struct header * header)
         header->headers,&(header->headers_size),0);
 }
 
-int readall(struct bufer * buf,int fd)
+ssize_t readall(struct bufer * buf,int fd)
 {
-    buf->len = read(fd,buf->buf,max_bufsize);
-    ssize_t n = buf->len;
-    for(;n > 0;n = read(fd,buf->buf + buf->len,max_bufsize - buf->len))
-        buf->len += n;
-    if((n == -1) && (errno != EAGAIN))
-        return n;
-    else
-        return buf->len;
-}
-
-struct header view_header(struct bufer * buf,int fd)
-{
-    struct header header;
-    buf->len = recv(fd,buf->buf,max_bufsize,MSG_PEEK);
-    parse_req(*buf,&header);
-    return header;
+    errno = 0;
+    ssize_t n = 0;
+    for(n = read(fd,buf->buf,max_bufsize);
+        (n > 0) & (errno != 0) & (n < max_bufsize);
+        n += read(fd,buf->buf + n,max_bufsize - n)){
+        ;
+    }
+    if(errno == EAGAIN)
+        errno = 0;
+    buf->len = n;
+    return n;
 }
 
 void view_data(int fd,struct bufer * buf)
@@ -34,24 +35,16 @@ void view_data(int fd,struct bufer * buf)
     buf->len = recv(fd,buf->buf,max_bufsize,MSG_PEEK);
 }
 
-int writeall(struct bufer * buf,int fd)
+ssize_t writeall(struct bufer buf,int fd)
 {
-    return 0;
+    errno = 0;
+    ssize_t n = 0;
+
+    for(;n < buf.len;n += write(fd,buf.buf + n,buf.len - n))
+        ;
+    return n;
 }
 
-//ElfHash
-static uint64_t hash(const char* str, uint64_t len){
-    uint64_t hash = 0;
-    uint64_t x = 0;
-    for(int i = 0; i < len; ++i){
-        hash = (hash << 4) + (*str++);
-        if((x = hash & 0xF0000000L) != 0){
-            hash ^= (x >> 24);
-        }
-        hash &= ~x;
-    }
-    return hash;
-}
 static int cut(const char * s,const char c)
 {
     for(int i = 0;s[i] != '\0';i++){
@@ -97,6 +90,7 @@ bool isHTTP(int fd)
         case CONNECT:
             return false;
         default:
+            log_error("Bad header\n%s",buf.buf);
             buf.buf[method_len] = '\0';
             log_error("unknow method: %s",buf.buf);
             return false;
@@ -120,6 +114,7 @@ bool isHTTPS(int fd)
         case OPTIONS:
             return false;
         default:
+            log_error("Bad header\n%s",buf.buf);
             buf.buf[method_len] = '\0';
             log_error("unknow method: %s",buf.buf);
             return false;
@@ -134,3 +129,18 @@ bool isHTTPS(int fd)
 #undef TRACE 
 #undef OPTIONS
 #undef CONNECT 
+
+struct phr_header * pos_header_field(struct phr_header headers[],
+                                     size_t headers_size,
+                                     const char * field_name,int len)
+{
+    for(size_t i = 0;i < headers_size;i++){
+
+        const char * name = headers[i].name;
+        size_t name_len = headers[i].name_len;
+        
+        if(hash(name,name_len) == hash(field_name,len))
+            return &headers[i];
+    }
+    return NULL;
+}
