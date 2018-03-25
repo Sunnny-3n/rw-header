@@ -21,6 +21,8 @@
 #include <stdarg.h>
 #include <sys/syscall.h>
 #include "httpparser.h"
+#include <signal.h>
+#include "rewrite.h"
 
 #define RED     "\x1b[31m"
 #define GREEN   "\x1b[32m"
@@ -33,7 +35,7 @@ typedef struct sockaddr SA;
 
 enum{
     evsize = 64,
-    mapsize = 1024 * 2, // 并发 1024 个连接
+    mapsize = 2048 * 2, // 并发 1024 个连接
     listenq = 1024 //from csapp.h  second argument to listen()
 };
 
@@ -91,6 +93,8 @@ void Pipe(int * pipe);
 
 int Set_nonblocking(int sockfd);
 void Socketpair(int * socks);
+//ElfHash
+uint64_t hash(const char* str, uint64_t len);
 
 //from csapp.h
 int Open_clientfd(char * hostname, int port);

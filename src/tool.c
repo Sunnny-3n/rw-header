@@ -9,10 +9,13 @@ void print_log(enum log_level level,const char * func,char * file,int line,char 
     char msg[1024];
     vsnprintf(msg,1024,format,ap);
 
-    time_t t = time(0);   
-    size_t timelen = strlen("13:01:22") + 1;
-    char * mode = "Error",* color = RED, //init
-         time[timelen];
+    time_t t;
+    time(&t);   
+    size_t timelen = 255;
+    char * mode = "Error",* color = RED; //init
+    char time[timelen];
+    strftime(time,timelen,"%F %T",localtime(&t));
+
     FILE * stream = stderr;
     switch(level){
         case Error : mode = "Error", stream = stderr;color = RED    ;break;
@@ -21,7 +24,7 @@ void print_log(enum log_level level,const char * func,char * file,int line,char 
         case Debug : mode = "Debug", stream = stderr;color = BLUE   ;break;
         case Error_exit : mode = "Error_exit",stream = stderr;color = RED;break;
     }
-    strftime(time,timelen,"%d:%H:%S",localtime(&t));
+    
     fprintf(stream,"%s[%s] [%s] [tid %ld] [%s:%d %s()] \033[0m %s\n",
             color,mode,time,gettid(),file,line,func,msg);
 }
@@ -186,4 +189,19 @@ int Open_listenfd(int port)
     if ((rc = open_listenfd(port)) < 0)
         log_error_exit("%s",strerror(errno));
     return rc;
+}
+
+//ElfHash
+uint64_t hash(const char* str, uint64_t len)
+{
+    uint64_t hash = 0;
+    uint64_t x = 0;
+    for(int i = 0; i < len; ++i){
+        hash = (hash << 4) + (*str++);
+        if((x = hash & 0xF0000000L) != 0){
+            hash ^= (x >> 24);
+        }
+        hash &= ~x;
+    }
+    return hash;
 }
