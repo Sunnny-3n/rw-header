@@ -16,12 +16,15 @@ void Accepf_all_and_init_link(int epfd,int listenfd,char * paddr,int pport);
 int main(int argc,char * argv[])
 {
     argc = 4;
-    argv[1] = "9998",argv[2] = "192.168.1.1",argv[3] = "8888";
+    //argv[1] = "9998",argv[2] = "192.168.1.1",argv[3] = "8888";
     struct args args = Parse_args(argc,argv);
     struct epoll_event evs[evsize];
     int listenfd = Open_listenfd(args.lport),
         epfd     = Init_epfd();
     offset   = listenfd;
+
+    //防止管道破裂,进程被杀死
+    signal(SIGPIPE,SIG_IGN);
 
     Set_nonblocking(listenfd);
     Add_epoll_fd(epfd,listenfd,EPOLLIN | EPOLLOUT | EPOLLET);
@@ -55,14 +58,20 @@ int main(int argc,char * argv[])
             switch(gettag(fd)){
             case HTTP:
 HTTP:
-                log_info("is HTTP");
-                settag(fd,Forward);
-                goto Forward;
+                if(isconnfd(fd) && (ev & EPOLLIN))
+                    rewrite_HTTP_header_and_send(fd,another_fd(fd));
+                if(isproxyfd(fd))
+                    goto Forward;
+                continue;
             case HTTPS:
 HTTPS:
-                log_info("is HTTPS");
-                settag(fd,Forward);
-                goto Forward;
+                if(isconnfd(fd) && (ev & EPOLLIN))
+                    rewrite_HTTPS_header_and_send(fd,another_fd(fd));
+                if(isproxyfd(fd)){
+                    settag(fd,Forward);
+                    goto Forward;
+                }
+                continue;
                 
             case Forward:
 Forward:
@@ -72,6 +81,7 @@ Forward:
                     for(int n = read(fd,buf,bsize);n > 0;n = read(fd,buf,bsize))
                         write(another_fd(fd),buf,n);
                 }
+                continue;
             default:
                 continue;
             }
